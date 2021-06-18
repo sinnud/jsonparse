@@ -6,10 +6,9 @@ The JSON solution
 - **Arthor**: Luke Du
 - **Updates**:
 
-Parse JSON data directly using JSON format mapping.
+  - 17JUN2021-LD load multiple JSON data. Instead of just load one data, change code to append way
 
-TODO: load multiple JSON data. Instead of just load one data, change code to append way
-TODO: allow remove special symbol like LF/CRLF and delimiter in content to avoid error when import data into database
+Parse JSON data directly using JSON format mapping.
 
 JsonUtils CLASS
 ---------------
@@ -123,6 +122,20 @@ class JsonUtils(object):
         mystr = ','.join(jsonlist)
         jstr = f"[{mystr}]"
         self.load_from_string(jstr = jstr)
+
+    def append_from_list(self, jsonlist=None):
+        """ 
+        *Append to JSON data from JSON list*
+
+        * use list extend method
+        """
+        self.json_data.extend(jsonlist)
+
+    def get_json_len(self):
+        """ 
+        * output length of JSON data
+        """
+        return len(self.json_data)
 
     def compute_all_paths(self):
         """ 

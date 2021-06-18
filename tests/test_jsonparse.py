@@ -58,6 +58,7 @@ The python functions
 import os
 import unittest
 import csv
+import json
 from datetime import datetime
 import traceback # Python error trace
 import logzero
@@ -153,8 +154,9 @@ class TestJSONparse(unittest.TestCase):
         logger.info(f'start python code {__file__}.\n')
         data_map_dir = f"{crt_dir}/../../data"
         json_df = f"{data_map_dir}/txn8698.json"
+        #json_df = f"{data_map_dir}/j5k.json"
         with open(json_df, 'r') as f:
-            json_data = f.read()
+            json_data = f.read().replace('\\n','')# .replace('\n', '').replace('\r', '').replace('|', '')
         logger.debug(f"raw data string length: {len(json_data)}")
         
         ju = JsonUtils(csv_delim='|', table_name_prefix='ex_')
@@ -208,6 +210,74 @@ class TestJSONparse(unittest.TestCase):
         ju.postgres_ddl(sql_file = f"{data_map_dir}/ex_v001.sql", schema_name = 'cvs')
         ju.json_map_export(map_file = f"{data_map_dir}/ex_v001.map")
         logger.info(f'end python code {__file__}.\n')
+
+    def test_json_gen_2(self):
+        """ test if we can append json in Python
+        * prepare data for test_json_append function below
+        """
+        logger.info(f'start python function TestJSONparse.test_json_gen_2 {__file__}.\n')
+        crt_dir = os.path.dirname(__file__)
+        data_map_dir = f"{crt_dir}/../../data"
+        json_df = f"{data_map_dir}/txn8698.json"
+        with open(json_df, 'r') as f:
+            json_data = f.read()
+        logger.debug(f"raw data string length: {len(json_data)}")
+        try:
+            jd = json.loads(json_data)
+        except:
+            print(f"{traceback.format_exc()}")
+            exit(1)
+        logger.info(f"Whole data have {len(jd)} records.")
+        j1k = jd[:1_000]
+        j1kstr = json.dumps(j1k)
+        with open(f"{data_map_dir}/j1k.json", "w") as f:
+            f.write(j1kstr)
+        j5k = jd[-5_000:]
+        j5kstr = json.dumps(j5k)
+        with open(f"{data_map_dir}/j5k.json", "w") as f:
+            f.write(j5kstr)
+
+        logger.info(f'end python code {__file__}.\n')
+
+
+    def test_json_append(self):
+        """ test if we can append json in Python
+        * test driven development example
+        * test and use in production
+        """
+        logger.info(f'start python code {__file__}.\n')
+        crt_dir = os.path.dirname(__file__)
+        data_map_dir = f"{crt_dir}/../../data"
+        json_df = f"{data_map_dir}/j5k.json"
+        # ju = JsonUtils(csv_delim='|', table_name_prefix='ex_')
+        # ju.load_from_string(df = json_df)
+        with open(f"{data_map_dir}/j5k.json", 'r') as f:
+            j1 = json.load(f)
+        with open(f"{data_map_dir}/j1k.json", 'r') as f:
+            j2 = json.load(f)
+        jd = j1 + j2
+        logger.info(f"total length of combined json list: {len(jd)}")
+        logger.info(f'end python code {__file__}.\n')
+
+    def test_json_utils_append(self):
+        """ test if we can append json in Python
+        * test driven development example
+        * test and use in production
+        """
+        logger.info(f'start python code {__file__}.\n')
+        crt_dir = os.path.dirname(__file__)
+        data_map_dir = f"{crt_dir}/../../data"
+        json_df = f"{data_map_dir}/j5k.json"
+        ju = JsonUtils(csv_delim='|', table_name_prefix='ex_')
+        ju.load_from_file(df = json_df)
+        logger.info(f"Now JU has data length {ju.get_json_len()}")
+        with open(f"{data_map_dir}/j1k.json", 'r') as f:
+            j2 = json.load(f)
+        ju.append_from_list(j2)
+        logger.info(f"Now JU has data length {ju.get_json_len()}")
+        logger.info(f'end python code {__file__}.\n')
+
+
 
 if __name__ == '__main__':
     unittest.main()

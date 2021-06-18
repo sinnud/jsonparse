@@ -26,4 +26,10 @@ Create PDF version documentation, store as extra source file in repository.
 
 - The python module sphinx to `make latex`
 - The MikTeX software to `pdflatex jsonparse.tex`
+- under linux (like ubuntu, with `latexmk` installed), just `make latexpdf`
 - copy the PDF file to repository
+
+## Updates
+
+- `JsonUtils.get_json_len` and `JsonUtils.append_from_list` methods allow append JSON array to existing array.
+- In test file, remove special symbols before go into JsonUtils.
