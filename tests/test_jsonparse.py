@@ -124,15 +124,18 @@ class TestJSONparse(unittest.TestCase):
         logger.info(f'start python code {__file__}.\n')
         data_map_dir = f"{crt_dir}/../../data"
         json_df = f"{data_map_dir}/txn8698.json"
+        logger.debug(f"Start loading data file {json_df}...")
         with open(json_df, 'r') as f:
             json_data = f.read()
         logger.debug(f"raw data string length: {len(json_data)}")
         
         ju = JsonUtils(csv_delim='|', table_name_prefix='ex_')
         ju.load_from_string(jstr = json_data)
-        
+        logger.debug(f"Extract all paths by going through whole JSON data...")
         ju.compute_all_paths()
+        logger.debug(f"Analize all paths to decide table structures...")
         ju.table_plan_json()
+        logger.debug(f"Output JSON map and SQL for creating tables...")
         ju.json_map_export(map_file = f"{data_map_dir}/ex_init.map")
         ju.postgres_ddl(sql_file = f"{data_map_dir}/ex_init.sql", schema_name = 'cvs')
         
