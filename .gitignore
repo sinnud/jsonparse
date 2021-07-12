@@ -1,5 +1,8 @@
 # user added begin
 
+# test from log folder
+log/
+
 # VS code
 .vscode
 

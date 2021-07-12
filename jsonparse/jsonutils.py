@@ -493,6 +493,90 @@ class JsonUtils(object):
                 if tbl_path == tbl["rootPath"]:
                     tbl["columnList"].append(j_clm)
 
+    def gen_tblstr_by_map(self):
+        """
+        *generate table structure based on map*
+        Later just append data into it
+        """
+        self.parsed_tables = dict()
+        for idx_tbl, csv_tbl in enumerate(self.map["tableList"], start=1):
+            tblName = csv_tbl["tableName"]
+            tblContent = []
+            self.parsed_tables[tblName] = tblContent
+
+    def parse_use_pool(self):
+        """
+        *parse data*
+
+        * use pool to parse data
+        * go through each tag of data
+        * logger.debug when tar is not in map (or record into list?)
+        * more like for one json record
+        """
+        self.gen_tblstr_by_map()
+        for jsuuid in self.json_data: # assume data are array of JSON records
+        # jsuuid = self.json_data
+            thisrec = [str(uuid.uuid4())]
+            thispath = ""
+            thisTblIdx = [tbl["rootPath"] for tbl in self.map["tableList"]].index(thispath) # root table
+            thisrec += [""] * (len(self.map["tableList"][thisTblIdx]["columnList"]))        # uuid and extra columns
+            thispool = []  # The work platform pool, instead of recursive
+            crt_path = []  # variable for path and pool
+            thisseqClmCnt = 0 # for this table, how many sequence variables
+            thisSeqVal = []   # for this record, value of sequence variables to make it unique
+            thispool.append((jsuuid, crt_path, thisrec, thisTblIdx, thisseqClmCnt, thisSeqVal))
+            while len(thispool) > 0: # work when thispool is not empty
+                poolCheckList = [(crt_tbl_idx, crt_seq_val) for (dummy, dummy, dummy, crt_tbl_idx, dummy, crt_seq_val) in thispool]
+                poolCheckVar = (thisTblIdx, thisSeqVal)
+                if poolCheckVar in poolCheckList: # this record have value in pool
+                    idxpool = poolCheckList.index(poolCheckVar) # work on this record from pool
+                else: # No value in this pool, ready to write to data
+                    strTblNm = self.map["tableList"][thisTblIdx]["tableName"]
+                    strRow = self.csv_delim.join(thisrec)
+                    logger.debug(f"{strTblNm}:{strRow}({type(strRow)})")
+                    self.parsed_tables[strTblNm].append(strRow)
+                    idxpool = 0 # Finish this record, get the first element in this pool
+                (jsonphase, crt_path, thisrec, thisTblIdx, seqClmCnt, thisSeqVal) = thispool.pop(idxpool)
+                if isinstance(jsonphase, collections.abc.MutableMapping):  # found a dict-like structure...
+                    for k, v in jsonphase.items():  # iterate over it; Python 2.x: source.iteritems()
+                        thispath = crt_path + [k]       # at this level, path and for pool
+                        if isinstance(v, str) or isinstance(v, int) or isinstance(v, float): # is there better way to check value?
+                            strpath = '.'.join(thispath)
+                            rootpathlen = len(self.map["tableList"][thisTblIdx]["rootPath"])
+                            strRelPath = strpath[rootpathlen+1:] if rootpathlen > 0 else strpath
+                            thisClmIdx = [clm["relativePath"] for clm in self.map["tableList"][thisTblIdx]["columnList"]].index(strRelPath)
+                            thisrec[1 + seqClmCnt + thisClmIdx] = str(v)
+                        else:
+                            thispool.append((v, thispath, thisrec, thisTblIdx, seqClmCnt, thisSeqVal))  # insert value and current path into pool
+                elif isinstance(jsonphase, collections.abc.Sequence) and not isinstance(jsonphase, str):
+                    #                                    Python 2.x: use basestring instead of str ^
+                    for idx, v in enumerate(jsonphase, start = 1): # loop through each element of Sequence
+                        newrec = thisrec[0:1+seqClmCnt] # obtain uuid and parent sequence value
+                        newrec.append(str(idx))         # append this sequence value
+                        newseqval = thisSeqVal.copy()
+                        newseqval.append(idx)           # also sequence value list
+                        newpath = crt_path              # sub table path
+                        newTblIdx = [tbl["rootPath"] for tbl in self.map["tableList"]].index('.'.join(newpath)) # must be one table
+                        newrec += [""] * (len(self.map["tableList"][newTblIdx]["columnList"])) # append extra columns based on table structure
+                        thispool.append((v, newpath, newrec, newTblIdx, seqClmCnt + 1, newseqval))  # insert into pool
+            # last record
+            strTblNm = self.map["tableList"][thisTblIdx]["tableName"]
+            strRow = self.csv_delim.join(thisrec)
+            logger.debug(f"{strTblNm}:{strRow}({type(strRow)})")
+            self.parsed_tables[strTblNm].append(strRow)
+
+    def debug_csv_output(self, csv_file = None):
+        """
+        *debug output parsed csv content*
+
+        * debug purpose to see the parsed data
+        """
+        with open(csv_file, 'w') as f:
+            for tbl_nm, content in self.parsed_tables.items():
+                f.write(f"\nTable {tbl_nm}:\n")
+                str_cont = '\n'.join(content)
+                f.write(f"{str_cont}\n")
+
 def get_paths(source, flag_json_array):
     """ 
     *get full path*
@@ -510,13 +594,39 @@ def get_paths(source, flag_json_array):
             #logger.info(f"DEBUG: mutablemapping {k} -> {paths}")
     # else, check if a list-like structure, remove if you don't want list paths included
     elif isinstance(source, collections.abc.Sequence) and not isinstance(source, str):
-        #                          Python 2.x: use basestring instead of str ^
+        #                              Python 2.x: use basestring instead of str ^
         for i, v in enumerate(source):
             # paths.append([i])
             # paths += [[i] + x for x in get_paths(v)]  # get sub-paths, extend with the current
             paths.append([flag_json_array])
             paths += [x for x in get_paths(v, flag_json_array)]  # get sub-paths, extend with the current
             #logger.info(f"DEBUG: sequence {i} -> {paths}")
+    return paths
+
+def get_path_pool(source, flag_json_array):
+    """
+    *get full paths using pool instead of recursice calling*
+
+    * replacement of get_paths
+    * more like for one JSON record
+    """
+    paths = []     # all paths from data, may have duplication
+    thispool = []  # The work platform pool, instead of recursive
+    crt_path = []  # variable for path and pool
+    thispool.append((source, crt_path))
+    while len(thispool) > 0: # work when thispool is not empty
+        (jsonphase, crt_path) = thispool.pop(0) # work on the first one, remove it from pool
+        if isinstance(jsonphase, collections.abc.MutableMapping):  # found a dict-like structure...
+            for k, v in jsonphase.items():  # iterate over it; Python 2.x: source.iteritems()
+                thispath = crt_path + [k]       # at this level, path and for pool
+                paths.append(thispath)          # path
+                thispool.append((v, thispath))  # insert value and current path into pool
+        elif isinstance(jsonphase, collections.abc.Sequence) and not isinstance(jsonphase, str):
+            #                                    Python 2.x: use basestring instead of str ^
+            for v in jsonphase: # loop through each element of Sequence
+                thispath = crt_path + [flag_json_array] # with special element: array
+                paths.append(thispath)                  # path
+                thispool.append((v, thispath))          # insert value and current path into pool
     return paths
 
 def name_from_path(path, name_list):
@@ -714,4 +824,19 @@ if __name__ == '__main__':
     logzero.logfile(mylog)
 
     logger.info(f'start python code {__file__}.\n')
+    jstr = """
+    [{"date": "2021-07-10", "txn": {"store": 123, "item": [{"sku":"456", "amt": 3.20}, {"sku": "789"}]}}]
+    """
+    # json_data = json.loads(jstr)
+    # p = get_path_pool(json_data, "__JSON_ARRAY__")
+    # logger.info(p)
+    ju = JsonUtils()
+    ju.load_from_string(jstr=jstr)
+    ju.compute_all_paths()
+    ju.table_plan_json()
+    # map_file = f"{crt_dir}/json_utils.map"
+    # ju.json_map_export(map_file = map_file)
+    ju.parse_use_pool()
+    csv_file = f"{crt_dir}/dbg_parsed.csv"
+    ju.debug_csv_output(csv_file = csv_file)
     logger.info(f'end python code {__file__}.\n')
