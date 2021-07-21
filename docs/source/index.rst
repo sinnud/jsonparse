@@ -10,6 +10,9 @@ Welcome to jsonparse's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+README
+======
+.. mdinclude:: ../../README.md
 
 Python Code
 ===========

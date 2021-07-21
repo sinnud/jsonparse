@@ -71,7 +71,7 @@ except:
     sys.path.insert(0, os.path.abspath('jsonparse'))
     print(sys.path)
     from jsonutils import JsonUtils
-
+'''
 from dbinterface.sql import Sql
 
 def GetPostgreSQLLoginInfo():
@@ -107,9 +107,9 @@ def flush_to_db(ju=None, db_conn=None, schema=None, truncate_before_flush=True):
         from io import StringIO
         db_conn.import_from_file(qry, StringIO('\n'.join(ju.parsed_tables[tbl])))
     pass
-
+'''
 class TestJSONparse(unittest.TestCase):
-    def test_map_gen(self):
+    def test_map_gen_recursive(self):
         """ test function: generate map based on data
         """
         crt_dir = os.path.dirname(__file__)
@@ -122,27 +122,65 @@ class TestJSONparse(unittest.TestCase):
         logzero.logfile(mylog)
 
         logger.info(f'start python code {__file__}.\n')
-        data_map_dir = f"{crt_dir}/../../data"
-        json_df = f"{data_map_dir}/txn8698.json"
+        # logger.debug(crt_dir)
+        data_map_dir = f"{crt_dir}/../../../data/json"
+        json_df = f"{data_map_dir}/rec100.json"
+        logger.debug(f"Start loading data file {json_df}...")
+        with open(json_df, 'r') as f:
+            json_data = f.read()
+        logger.debug(f"raw data string length: {len(json_data)}")
+        prefix = 'ex10_'
+        ju = JsonUtils(csv_delim='|', table_name_prefix=prefix)
+        ju.load_from_string(jstr = json_data)
+        logger.debug(f"Extract all paths by going through whole JSON data...")
+        ju.compute_all_paths()
+        # ju.compute_all_paths(use_pool = True)
+        logger.debug(f"Analyze all paths to decide table structures...")
+        ju.table_plan_json()
+        logger.debug(f"Output JSON map and SQL for creating tables...")
+        ju.json_map_export(map_file = f"{data_map_dir}/{prefix}init.map")
+        ju.map_export_csv(map_csv = f"{data_map_dir}/{prefix}init.csv")
+        ju.postgres_ddl(sql_file = f"{data_map_dir}/{prefix}init.sql", schema_name = 'gap')
+        
+        logger.info(f'end python code {__file__}.\n')
+
+    def test_map_gen_pool(self):
+        """ test function: generate map based on data
+        """
+        crt_dir = os.path.dirname(__file__)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        script_fn = os.path.basename(__file__).replace('.py', '')
+        # mylog = f"{crt_dir}/{script_fn}_{timestamp}.log"
+        mylog = f"{crt_dir}/{script_fn}.log"
+        if os.path.exists(mylog):
+            os.remove(mylog)
+        logzero.logfile(mylog)
+
+        logger.info(f'start python code {__file__}.\n')
+        # logger.debug(crt_dir)
+        data_map_dir = f"{crt_dir}/../../../data/json"
+        json_df = f"{data_map_dir}/test.json"
         logger.debug(f"Start loading data file {json_df}...")
         with open(json_df, 'r') as f:
             json_data = f.read()
         logger.debug(f"raw data string length: {len(json_data)}")
         
-        ju = JsonUtils(csv_delim='|', table_name_prefix='ex_')
+        prefix = 'ex1_'
+        ju = JsonUtils(csv_delim='|', table_name_prefix=prefix)
         ju.load_from_string(jstr = json_data)
         logger.debug(f"Extract all paths by going through whole JSON data...")
-        ju.compute_all_paths()
-        logger.debug(f"Analize all paths to decide table structures...")
+        # ju.compute_all_paths()
+        ju.compute_all_paths(use_pool = True)
+        logger.debug(f"Analyze all paths to decide table structures...")
         ju.table_plan_json()
         logger.debug(f"Output JSON map and SQL for creating tables...")
-        ju.json_map_export(map_file = f"{data_map_dir}/ex_init.map")
-        ju.postgres_ddl(sql_file = f"{data_map_dir}/ex_init.sql", schema_name = 'cvs')
+        ju.json_map_export(map_file = f"{data_map_dir}/{prefix}init.map")
+        ju.map_export_csv(map_csv = f"{data_map_dir}/{prefix}init.csv")
+        ju.postgres_ddl(sql_file = f"{data_map_dir}/{prefix}init.sql", schema_name = 'gap')
         
         logger.info(f'end python code {__file__}.\n')
 
-
-    def test_parse(self):
+    def test_parse_old(self):
         """ test function: parse JSON data based on map; import into database
         """
         crt_dir = os.path.dirname(__file__)
@@ -155,23 +193,56 @@ class TestJSONparse(unittest.TestCase):
         logzero.logfile(mylog)
 
         logger.info(f'start python code {__file__}.\n')
-        data_map_dir = f"{crt_dir}/../../data"
-        json_df = f"{data_map_dir}/txn8698.json"
-        #json_df = f"{data_map_dir}/j5k.json"
+        data_map_dir = f"{crt_dir}/../../../data/json"
+        json_df = f"{data_map_dir}/test.json"
         with open(json_df, 'r') as f:
             json_data = f.read().replace('\\n','')# .replace('\n', '').replace('\r', '').replace('|', '')
         logger.debug(f"raw data string length: {len(json_data)}")
-        
-        ju = JsonUtils(csv_delim='|', table_name_prefix='ex_')
+        prefix='ex_'
+        ju = JsonUtils(csv_delim='|', table_name_prefix=prefix)
         ju.load_from_string(jstr = json_data)
-
-        ju.json_map_import(map_file = f"{data_map_dir}/ex_init.map")
+        logger.debug("After load data, import map...")
+        ju.json_map_import(map_file = f"{data_map_dir}/{prefix}init.map")
+        logger.debug("parsing...")
         ju.parse_to_csv()
+        logger.debug("output...")
+        ju.debug_csv_output(csv_file = f"{data_map_dir}/{prefix}parsed.csv")
         # flush to db?
-        flush_to_db(ju=ju, db_conn=get_db_conn(), schema='cvs')
+        # flush_to_db(ju=ju, db_conn=get_db_conn(), schema='cvs')
 
         logger.info(f'end python code {__file__}.\n')
 
+    def test_parse_pool(self):
+        """ test function: parse JSON data based on map; import into database
+        """
+        crt_dir = os.path.dirname(__file__)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        script_fn = os.path.basename(__file__).replace('.py', '')
+        # mylog = f"{crt_dir}/{script_fn}_{timestamp}.log"
+        mylog = f"{crt_dir}/{script_fn}.log"
+        if os.path.exists(mylog):
+            os.remove(mylog)
+        logzero.logfile(mylog)
+
+        logger.info(f'start python code {__file__}.\n')
+        data_map_dir = f"{crt_dir}/../../../data/json"
+        json_df = f"{data_map_dir}/test.json"
+        with open(json_df, 'r') as f:
+            json_data = f.read().replace('\\n','')# .replace('\n', '').replace('\r', '').replace('|', '')
+        logger.debug(f"raw data string length: {len(json_data)}")
+        prefix = 'ex10_'
+        ju = JsonUtils(csv_delim='|', table_name_prefix=prefix)
+        ju.load_from_string(jstr = json_data)
+        logger.debug("After load data, import map...")
+        ju.json_map_import(map_file = f"{data_map_dir}/{prefix}init.map")
+        logger.debug("parsing...")
+        ju.parse_use_pool()
+        logger.debug("output...")
+        ju.debug_csv_output(csv_file = f"{data_map_dir}/{prefix}parsed.csv")
+        # flush to db?
+        # flush_to_db(ju=ju, db_conn=get_db_conn(), schema='cvs')
+
+        logger.info(f'end python code {__file__}.\n')
     def test_map2csv(self):
         """ test function: import map to CSV file for user revising
         """

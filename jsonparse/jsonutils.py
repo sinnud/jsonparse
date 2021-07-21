@@ -7,8 +7,9 @@ The JSON solution
 - **Updates**:
 
   - 17JUN2021-LD load multiple JSON data. Instead of just load one data, change code to append way
+  - 18JUL2021-LD use pool to parse data (simple code; arbitrary array level)
 
-Parse JSON data directly using JSON format mapping.
+- **Purpose**: Parse JSON data directly using JSON format mapping.
 
 JsonUtils CLASS
 ---------------
@@ -137,7 +138,7 @@ class JsonUtils(object):
         """
         return len(self.json_data)
 
-    def compute_all_paths(self):
+    def compute_all_paths(self, use_pool=False):
         """ 
         *Compute all paths in JSON data*
 
@@ -145,7 +146,11 @@ class JsonUtils(object):
         * Store output into **arraylist** (table) and **pathlist**
         """
         try:
-            allpathlist = get_paths(self.json_data, self.flag_json_array)
+            if use_pool:
+                allpathlist = get_path_pool(self.json_data, self.flag_json_array)
+            else:
+                allpathlist = get_paths(self.json_data, self.flag_json_array)
+            # logger.debug(allpathlist)
             # can multithread do so
         except:
             print(f"{traceback.format_exc()}")
@@ -532,9 +537,13 @@ class JsonUtils(object):
                     idxpool = poolCheckList.index(poolCheckVar) # work on this record from pool
                 else: # No value in this pool, ready to write to data
                     strTblNm = self.map["tableList"][thisTblIdx]["tableName"]
-                    strRow = self.csv_delim.join(thisrec)
-                    logger.debug(f"{strTblNm}:{strRow}({type(strRow)})")
-                    self.parsed_tables[strTblNm].append(strRow)
+                    rowval = ''.join(thisrec[1 + seqClmCnt :])
+                    if len(rowval) > 0: # only store rows with values
+                        strRow = self.csv_delim.join(thisrec)
+                        # logger.debug(f"{strTblNm}:{strRow}({type(strRow)})")
+                        self.parsed_tables[strTblNm].append(strRow)
+                    # else:
+                    #     logger.debug(f"For table {strTblNm}, this record has value {rowval} (seqcmncnt: {seqClmCnt}) {thisrec}.")
                     idxpool = 0 # Finish this record, get the first element in this pool
                 (jsonphase, crt_path, thisrec, thisTblIdx, seqClmCnt, thisSeqVal) = thispool.pop(idxpool)
                 if isinstance(jsonphase, collections.abc.MutableMapping):  # found a dict-like structure...
@@ -561,9 +570,13 @@ class JsonUtils(object):
                         thispool.append((v, newpath, newrec, newTblIdx, seqClmCnt + 1, newseqval))  # insert into pool
             # last record
             strTblNm = self.map["tableList"][thisTblIdx]["tableName"]
-            strRow = self.csv_delim.join(thisrec)
-            logger.debug(f"{strTblNm}:{strRow}({type(strRow)})")
-            self.parsed_tables[strTblNm].append(strRow)
+            rowval = ''.join(thisrec[1 + seqClmCnt :])
+            if len(rowval) > 0: # only store rows with values
+                strRow = self.csv_delim.join(thisrec)
+                # logger.debug(f"{strTblNm}:{strRow}({type(strRow)})")
+                self.parsed_tables[strTblNm].append(strRow)
+            # else:
+            #     logger.debug(f"For table {strTblNm}, this record has value {rowval} (seqcmncnt: {seqClmCnt}) {thisrec}.")
 
     def debug_csv_output(self, csv_file = None):
         """
@@ -626,7 +639,7 @@ def get_path_pool(source, flag_json_array):
             for v in jsonphase: # loop through each element of Sequence
                 thispath = crt_path + [flag_json_array] # with special element: array
                 paths.append(thispath)                  # path
-                thispool.append((v, thispath))          # insert value and current path into pool
+                thispool.append((v, crt_path))          # insert value and current path into pool
     return paths
 
 def name_from_path(path, name_list):
